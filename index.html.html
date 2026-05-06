@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IAT Study</title>
+  <script src="https://unpkg.com/jspsych@7.3.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response"></script>
+  <link href="https://unpkg.com/jspsych@7.3.0/css/jspsych.css" rel="stylesheet" />
+
+  <style>
+    body {
+      background-color: #f2f2f2;
+      font-family: Arial, sans-serif;
+    }
+
+    .iat-container {
+      width: 900px;
+      margin: auto;
+      text-align: center;
+      padding-top: 40px;
+    }
+
+    .iat-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 40px;
+    }
+
+    .stimulus {
+      font-size: 42px;
+      margin-top: 60px;
+      margin-bottom: 60px;
+    }
+
+    .instructions {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .key-info {
+      font-size: 16px;
+      color: #666;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body></body>
+
+<script>
+
+const lawrence = ["Lawrence","City council","Essex Street","South Lawrence","The Loop","Multi-family home","Gateway"];
+const andover = ["North Andover","Town meeting","Route 114","Turnpike St","Merrimack College","Single-family home","Rolf’s"];
+const positive = ["Peaceful","Safe","Clean","Friendly","Quiet","Thriving","Charming"];
+const negative = ["Dangerous","Chaotic","Unsafe","Dirty","Crowded","Noisy","Run-down"];
+
+function block(leftLabel, rightLabel, leftItems, rightItems, trials=20, blockName=""){
+  let arr = [];
+
+  for(let i=0;i<trials;i++){
+    let isLeft = Math.random() < 0.5;
+    let word = isLeft
+      ? leftItems[Math.floor(Math.random()*leftItems.length)]
+      : rightItems[Math.floor(Math.random()*rightItems.length)];
+
+    arr.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: `
+        <div class="iat-container">
+
+          <div class="iat-header">
+            <div>${leftLabel} (E)</div>
+            <div>${rightLabel} (I)</div>
+          </div>
+
+          <div class="stimulus">${word}</div>
+
+          <div class="key-info">Press E or I</div>
+        </div>
+      `,
+      choices: ['e','i'],
+      data: {
+        correct: isLeft ? 'e' : 'i',
+        block: blockName
+      },
+      on_finish: function(data){
+        data.correct = data.response == data.correct;
+      }
+    });
+  }
+
+  return arr;
+}
+
+function instruction(text){
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <div class="iat-container">
+        <div class="instructions">${text}</div>
+        <p>Press any key to continue</p>
+      </div>
+    `
+  };
+}
+
+let timeline = [];
+
+// INTRO
+timeline.push(instruction(
+  "In this task, you will categorize words as quickly and accurately as possible."
+));
+
+// BLOCKS
+timeline.push(instruction("Round 1: Lawrence vs North Andover"));
+timeline.push(...block("Lawrence","North Andover", lawrence, andover, 20, "A"));
+
+timeline.push(instruction("Round 2: Positive vs Negative"));
+timeline.push(...block("Positive","Negative", positive, negative, 20, "B"));
+
+timeline.push(instruction("Round 3: Combined task"));
+timeline.push(...block("Lawrence + Positive","North Andover + Negative",
+  lawrence.concat(positive),
+  andover.concat(negative),
+  20,
+  "C"
+));
+
+timeline.push(instruction("Round 4: Same task (faster)"));
+timeline.push(...block("Lawrence + Positive","North Andover + Negative",
+  lawrence.concat(positive),
+  andover.concat(negative),
+  40,
+  "D"
+));
+
+timeline.push(instruction("Round 5: Switch sides"));
+timeline.push(...block("North Andover","Lawrence", andover, lawrence, 20, "E"));
+
+timeline.push(instruction("Round 6: New pairing"));
+timeline.push(...block("North Andover + Positive","Lawrence + Negative",
+  andover.concat(positive),
+  lawrence.concat(negative),
+  20,
+  "F"
+));
+
+timeline.push(instruction("Round 7: Final test"));
+timeline.push(...block("North Andover + Positive","Lawrence + Negative",
+  andover.concat(positive),
+  lawrence.concat(negative),
+  40,
+  "G"
+));
+
+// END + RESULTS
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function(){
+
+    let data = jsPsych.data.get();
+
+    let A = data.filter({block:"D"}).select('rt').values;
+    let B = data.filter({block:"G"}).select('rt').values;
+
+    function avg(x){
+      return x.reduce((a,b)=>a+b,0)/x.length;
+    }
+
+    let diff = avg(B) - avg(A);
+
+    let resultText = "";
+
+    if(diff > 100){
+      resultText = "Stronger automatic association of Lawrence with negative traits.";
+    } else if(diff < -100){
+      resultText = "Stronger automatic association of Lawrence with positive traits.";
+    } else {
+      resultText = "No strong automatic preference detected.";
+    }
+
+    return `
+      <div class="iat-container">
+        <h2>Results</h2>
+        <p><strong>Score:</strong> ${Math.round(diff)} ms</p>
+        <p>${resultText}</p>
+        <p style="font-size:14px;color:#666;">
+          This measures automatic associations, not deliberate beliefs.
+        </p>
+        <p>Press any key to finish.</p>
+      </div>
+    `;
+  }
+});
+
+const jsPsych = initJsPsych();
+jsPsych.run(timeline);
+
+</script>
+</html>
